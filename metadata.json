@@ -1,0 +1,6 @@
+{
+  "name": "SENTRA - Sentiment & Emotional Tracking Risk & Analysis",
+  "description": "AI-assisted victim well-being monitoring and early-intervention platform designed for public-service justice, trial, and rehabilitation support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

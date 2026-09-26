@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "CheckIn": {
+      "title": "CheckIn",
+      "description": "Confidential well-being check-in submitted by complainants",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of check-in"
+        },
+        "victimId": {
+          "type": "string",
+          "description": "Complainant/Victim ID"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp of submission"
+        },
+        "overallMood": {
+          "type": "number",
+          "description": "Self-reported mood on 1-5 scale"
+        },
+        "stressLevel": {
+          "type": "number",
+          "description": "Self-reported stress level on 1-5 scale"
+        },
+        "sleepQuality": {
+          "type": "number",
+          "description": "Self-reported sleep quality on 1-5 scale"
+        },
+        "feelsSafe": {
+          "type": "boolean",
+          "description": "Safety perception affirmation"
+        },
+        "hasSupportToTalk": {
+          "type": "boolean",
+          "description": "Whether complainant has a trusted person to talk to"
+        },
+        "wantsCounsellorCall": {
+          "type": "boolean",
+          "description": "Whether proactive caseworker outreach is requested"
+        },
+        "freeTextNote": {
+          "type": "string",
+          "description": "Optional confidential notes regarding upcoming hearings or feelings"
+        },
+        "voiceRecorded": {
+          "type": "boolean",
+          "description": "Whether acoustic voice prosody was recorded"
+        },
+        "voiceTranscript": {
+          "type": "string",
+          "description": "Speech-to-text transcript"
+        },
+        "distressIndicator": {
+          "type": "number",
+          "description": "Non-clinical decision-support distress indicator score (0-100)"
+        },
+        "sentimentScore": {
+          "type": "number",
+          "description": "Sentiment score (-1.0 to 1.0)"
+        },
+        "primaryEmotions": {
+          "type": "string",
+          "description": "Comma-separated primary emotional tags"
+        }
+      },
+      "required": [
+        "id",
+        "victimId",
+        "timestamp",
+        "overallMood",
+        "stressLevel",
+        "sleepQuality",
+        "feelsSafe"
+      ]
+    },
+    "Victim": {
+      "title": "Victim",
+      "description": "Complainant demographic and case profile information",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Victim ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full legal or preferred name"
+        },
+        "gender": {
+          "type": "string",
+          "description": "Gender identity"
+        },
+        "mail": {
+          "type": "string",
+          "description": "Email address"
+        },
+        "mobileNumber": {
+          "type": "string",
+          "description": "Registered mobile number"
+        },
+        "location": {
+          "type": "string",
+          "description": "Jurisdiction address"
+        },
+        "relativeDetails": {
+          "type": "string",
+          "description": "Emergency relative / next of kin details"
+        },
+        "age": {
+          "type": "string",
+          "description": "Age in years"
+        },
+        "caseId": {
+          "type": "string",
+          "description": "Linked judicial proceeding case ID"
+        },
+        "caseType": {
+          "type": "string",
+          "description": "Legal offence classification"
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "description": "Registered language code"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "mail",
+        "caseId"
+      ]
+    }
+  },
+  "firestore": {
+    "/checkins/{checkInId}": {
+      "schema": "CheckIn",
+      "description": "Confidential well-being check-in collection"
+    },
+    "/victims/{victimId}": {
+      "schema": "Victim",
+      "description": "Victim profile records"
+    }
+  }
+}
