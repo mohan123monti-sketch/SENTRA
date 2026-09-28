@@ -326,76 +326,79 @@ records will be archived or purged in accordance with your request.
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Top Header Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <span className="text-xs font-mono uppercase tracking-wider text-teal-800 dark:text-teal-300 font-semibold flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-teal-700" />
-              <span>Complainant Account & Data Management</span>
+      <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 md:p-8 shadow-md text-white mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
+          <div className="flex-1">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 font-bold bg-teal-900/40 px-2.5 py-1 rounded-md border border-teal-800 inline-flex items-center gap-1.5 mb-3">
+              <User className="w-3.5 h-3.5 text-teal-300" />
+              <span>Complainant Account &amp; Data Management</span>
             </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-1">
-              My Profile & Case Details
+            <h1 className="text-3xl font-bold tracking-tight mb-2">
+              My Profile &amp; Case Details
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-slate-300 text-sm max-w-xl leading-relaxed">
               As a registered complainant, you have sovereign rights to inspect, update, and manage your personal details, emergency contacts, case classification, and privacy consents at any time.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <span className="px-2.5 py-1 rounded bg-teal-50 dark:bg-teal-900/30 border border-teal-200 font-mono text-xs font-semibold text-teal-900 dark:text-teal-100">
-              {victimId}
-            </span>
-            <span className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700/80 font-mono text-xs text-slate-700 dark:text-slate-300">
-              {caseId}
-            </span>
+          <div className="flex flex-col gap-2 self-start sm:self-auto shrink-0 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 min-w-[200px]">
+             <div className="flex items-center justify-between text-xs font-mono text-slate-300 mb-1">
+                <span>Account ID</span>
+             </div>
+             <div className="text-xl font-bold font-mono tracking-tight text-white mb-2">{victimId}</div>
+             <div className="h-px bg-white/10 my-1"></div>
+             <div className="flex items-center justify-between text-xs font-mono text-slate-300 mt-1 mb-1">
+                <span>Linked Case</span>
+             </div>
+             <div className="text-sm font-bold font-mono tracking-tight text-teal-300">{caseId}</div>
           </div>
         </div>
 
         {/* Tab Selection */}
-        <div className="mt-6 flex border-b border-slate-200 dark:border-slate-700/80 gap-6 text-xs font-medium">
+        <div className="mt-8 flex gap-2">
           <button
             onClick={() => setActiveSubTab('profile')}
-            className={`pb-2.5 border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
               activeSubTab === 'profile'
-                ? 'border-teal-700 text-teal-900 dark:text-teal-100 font-bold'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
+                ? 'bg-teal-500 text-slate-950 shadow-sm'
+                : 'bg-white/5 hover:bg-white/10 text-slate-300'
             }`}
           >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Personal & Case Profile (11 Fields)</span>
+            <Edit3 className="w-4 h-4" />
+            <span>Personal &amp; Case Profile</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('consent')}
-            className={`pb-2.5 border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
               activeSubTab === 'consent'
-                ? 'border-teal-700 text-teal-900 dark:text-teal-100 font-bold'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
+                ? 'bg-teal-500 text-slate-950 shadow-sm'
+                : 'bg-white/5 hover:bg-white/10 text-slate-300'
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Privacy Consents & Data Rights</span>
+            <ShieldCheck className="w-4 h-4" />
+            <span>Privacy Consents &amp; Data Rights</span>
           </button>
         </div>
       </div>
 
       {/* Feedback Alerts */}
       {saveSuccess && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-emerald-950 animate-in fade-in duration-200">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-sm text-emerald-950 animate-in fade-in duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span className="font-medium">{saveMessage}</span>
         </div>
       )}
 
       {downloadSuccessNotice && (
-        <div className="p-3.5 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 rounded-lg flex items-center justify-between text-xs text-teal-950 animate-in fade-in duration-200">
-          <div className="flex items-center gap-2">
+        <div className="p-4 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 rounded-xl flex items-center justify-between text-sm text-teal-950 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
             <Download className="w-4 h-4 text-teal-700 shrink-0" />
             <span>{downloadSuccessNotice}</span>
           </div>
           <button 
             onClick={() => setDownloadSuccessNotice(null)} 
-            className="text-[11px] underline font-semibold text-teal-800 dark:text-teal-300 hover:text-teal-950"
+            className="text-xs underline font-semibold text-teal-800 dark:text-teal-300 hover:text-teal-950"
           >
             Dismiss
           </button>
@@ -406,13 +409,15 @@ records will be archived or purged in accordance with your request.
       {activeSubTab === 'profile' && (
         <form onSubmit={handleSaveProfile} className="space-y-6">
           {/* Section A: Personal & Contact Information */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/50">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <User className="w-4 h-4 text-teal-700" />
-                <span>1. Personal & Contact Information</span>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-6 md:p-8 shadow-sm space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800/50">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800 text-teal-700">
+                  <User className="w-4 h-4" />
+                </div>
+                <span>Personal &amp; Contact Information</span>
               </h2>
-              <span className="text-[11px] text-slate-400 font-mono">Editable by Victim</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md tracking-wider">Editable</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
@@ -582,13 +587,15 @@ records will be archived or purged in accordance with your request.
           </div>
 
           {/* Section B: Emergency & Relative Details */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/50">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-teal-700" />
-                <span>2. Emergency Relative & Trusted Contact Details</span>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-6 md:p-8 shadow-sm space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800/50">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-teal-50 dark:bg-teal-900/30 border border-teal-100 dark:border-teal-800 text-teal-700">
+                  <Users className="w-4 h-4" />
+                </div>
+                <span>Emergency Contact Details</span>
               </h2>
-              <span className="text-[11px] text-slate-400 font-mono">Editable by Victim</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md tracking-wider">Editable</span>
             </div>
 
             {/* 6. Relative details */}

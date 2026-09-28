@@ -255,29 +255,21 @@ export const Header: React.FC<HeaderProps> = ({
           <SentraLogo size={32} />
         </button>
 
-        {/* Zone 2: 4-6 clean text navigation links */}
+        {/* Zone 2: Navigation links (Hidden in portal, moved to Sidebar) */}
         <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-400">
-          {currentLinks.map((item) => {
-            const isActive = currentView === 'portal' && activeTab === item.id;
+          {currentView !== 'portal' && currentLinks.map((item) => {
+            const isActive = false;
             return (
               <button
                 key={item.id}
                 onClick={() => {
-                  if (currentView === 'portal') {
-                    if (setActiveTab) setActiveTab(item.id);
-                  } else {
-                    onNavigateView('public');
-                    setTimeout(() => {
-                      const el = document.getElementById(item.id);
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
-                    }, 60);
-                  }
+                  onNavigateView('public');
+                  setTimeout(() => {
+                    const el = document.getElementById(item.id);
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }, 60);
                 }}
-                className={`whitespace-nowrap transition-colors py-1 border-b-2 text-sm ${
-                  isActive 
-                    ? 'border-teal-700 text-teal-900 dark:text-teal-100 font-semibold' 
-                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:border-slate-300 dark:border-slate-700'
-                }`}
+                className={`whitespace-nowrap transition-colors py-1 border-b-2 text-sm border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:border-slate-300 dark:border-slate-700`}
               >
                 {item.label}
               </button>
@@ -364,55 +356,6 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="text-xs text-slate-400 font-mono mb-2 uppercase">
             {currentView === 'portal' ? roleLabels[role] : 'Navigation'}
           </div>
-
-          {currentLinks.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                if (currentView === 'portal') {
-                  if (setActiveTab) setActiveTab(item.id);
-                } else {
-                  onNavigateView('public');
-                  setTimeout(() => {
-                    const el = document.getElementById(item.id);
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }, 60);
-                }
-                setMobileMenuOpen(false);
-              }}
-              className={`block w-full text-left px-3 py-2 text-sm rounded ${
-                activeTab === item.id 
-                  ? 'bg-slate-100 dark:bg-slate-900/80 text-teal-900 dark:text-teal-100 font-semibold' 
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-950'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-
-          {currentView === 'portal' && role === 'victim' && onOpenEmergencyModal && (
-            <button
-              onClick={() => {
-                onOpenEmergencyModal();
-                setMobileMenuOpen(false);
-              }}
-              className="block w-full text-center px-3 py-2 mt-2 text-sm font-semibold text-rose-800 bg-rose-50 border border-rose-300 rounded"
-            >
-              {t.emergencyTitle} (Immediate Support)
-            </button>
-          )}
-
-          {currentView === 'portal' && (
-            <button
-              onClick={() => {
-                handleSignOut();
-                setMobileMenuOpen(false);
-              }}
-              className="block w-full text-center px-3 py-2 mt-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-900/80 rounded"
-            >
-              Sign Out
-            </button>
-          )}
 
           {currentView !== 'portal' && (
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800/50 space-y-2">

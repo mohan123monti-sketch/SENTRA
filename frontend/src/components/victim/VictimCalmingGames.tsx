@@ -29,31 +29,31 @@ export const VictimCalmingGames: React.FC<{ onNavigateTab: (tab: string) => void
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Top Header Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 md:p-8 shadow-md text-white mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <span className="text-xs font-mono uppercase tracking-wider text-teal-800 dark:text-teal-300 font-semibold flex items-center gap-1.5">
-            <Gamepad2 className="w-3.5 h-3.5 text-teal-700" />
-            <span>Mindful Oasis & Calming De-escalation</span>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 font-bold bg-teal-900/40 px-2.5 py-1 rounded-md border border-teal-800 inline-flex items-center gap-1.5 mb-3">
+            <Gamepad2 className="w-3.5 h-3.5 text-teal-300" />
+            Mindful Oasis
           </span>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-1">
-            Mindful Stress Relief & Grounding Games
+          <h1 className="text-3xl font-bold tracking-tight mb-2">
+            Calming Games &amp; Grounding Activities
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
-            Legal proceedings place high demands on your emotional nervous system. These sensory grounding games are designed to lower acute physiological stress, break ruminating thought loops, and restore inner equilibrium.
+          <p className="text-slate-300 text-sm max-w-xl leading-relaxed">
+            Simple, soothing activities to help lower stress and restore calm during difficult moments.
           </p>
         </div>
 
         <button
           onClick={() => onNavigateTab('chatai')}
-          className="px-3.5 py-2 border border-teal-200 bg-teal-50 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-teal-100 transition-colors self-start sm:self-auto shrink-0"
+          className="px-5 py-2.5 border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors self-start shrink-0 shadow-sm"
         >
-          <Bot className="w-4 h-4 text-teal-700" />
-          <span>Talk to AI Companion</span>
+          <Bot className="w-4 h-4 text-teal-400" />
+          Talk to AURA
         </button>
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 p-1.5 shadow-xs flex flex-wrap gap-1.5 text-xs font-semibold">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/80 p-2 shadow-sm flex flex-wrap gap-1.5 text-xs font-semibold">
         <button
           onClick={() => setActiveGame('bubbles')}
           className={`flex-1 min-w-[140px] py-2 px-3 rounded text-center transition-all flex items-center justify-center gap-2 ${
@@ -104,7 +104,7 @@ export const VictimCalmingGames: React.FC<{ onNavigateTab: (tab: string) => void
       </div>
 
       {/* ACTIVE GAME RENDER */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 p-6 shadow-xs min-h-[460px]">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-6 md:p-8 shadow-sm min-h-[460px]">
         {activeGame === 'bubbles' && <WorryBubbleGame />}
         {activeGame === 'breathing' && <BreathingSphereGame />}
         {activeGame === 'zen_garden' && <ZenSandGardenGame />}

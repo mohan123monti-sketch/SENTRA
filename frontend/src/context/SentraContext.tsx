@@ -77,11 +77,20 @@ interface SentraContextType {
 const SentraContext = createContext<SentraContextType | undefined>(undefined);
 
 export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRole] = useState<UserRole>('public');
+  const [role, setRole] = useState<UserRole>(() => {
+    return (localStorage.getItem('sentra_role') as UserRole) || 'public';
+  });
   const [language, setLanguage] = useState<LanguageCode>('en');
-  const [isVictimAuthenticated, setIsVictimAuthenticated] = useState<boolean>(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [activeUser, setActiveUser] = useState<import('../types/sentra').ActiveUser | null>(null);
+  const [isVictimAuthenticated, setIsVictimAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('sentra_is_victim_auth') === 'true';
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('sentra_is_auth') === 'true';
+  });
+  const [activeUser, setActiveUser] = useState<import('../types/sentra').ActiveUser | null>(() => {
+    const saved = localStorage.getItem('sentra_active_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   
   const [victim, setVictim] = useState<VictimProfile>(INITIAL_VICTIM);
   const [cases, setCases] = useState<CaseRecord[]>(INITIAL_CASES);
@@ -162,13 +171,19 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsAuthenticated(true);
     setIsVictimAuthenticated(true);
     setRole('victim');
-    setActiveUser({
-      role: 'victim',
+    const newUser = {
+      role: 'victim' as UserRole,
       name: mergedVictim.name || mergedVictim.pseudonym,
       id: mergedVictim.id,
       badge: mergedVictim.caseId,
       designation: 'Registered Complainant'
-    });
+    };
+    setActiveUser(newUser);
+
+    localStorage.setItem('sentra_is_auth', 'true');
+    localStorage.setItem('sentra_is_victim_auth', 'true');
+    localStorage.setItem('sentra_role', 'victim');
+    localStorage.setItem('sentra_active_user', JSON.stringify(newUser));
 
     const timestamp = new Date().toISOString();
     const loginAudit: AuditLogEntry = {
@@ -227,13 +242,19 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsAuthenticated(true);
     setIsVictimAuthenticated(false);
     setRole(staffRole);
-    setActiveUser({
+    const newUser = {
       role: staffRole,
       name: staffName || profile.name,
       id: staffId || profile.id,
       badge: profile.id,
       designation: designation || profile.designation
-    });
+    };
+    setActiveUser(newUser);
+
+    localStorage.setItem('sentra_is_auth', 'true');
+    localStorage.setItem('sentra_is_victim_auth', 'false');
+    localStorage.setItem('sentra_role', staffRole);
+    localStorage.setItem('sentra_active_user', JSON.stringify(newUser));
 
     const timestamp = new Date().toISOString();
     const loginAudit: AuditLogEntry = {
@@ -269,6 +290,13 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsVictimAuthenticated(false);
     setActiveUser(null);
     setRole('public');
+
+    localStorage.removeItem('sentra_is_auth');
+    localStorage.removeItem('sentra_is_victim_auth');
+    localStorage.removeItem('sentra_role');
+    localStorage.removeItem('sentra_active_user');
+    localStorage.removeItem('sentra_current_view');
+    localStorage.removeItem('sentra_active_tab');
   };
 
   // Apply accessibility settings to HTML root

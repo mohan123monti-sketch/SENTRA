@@ -136,15 +136,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
       <div className="max-w-xl w-full bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700/80 shadow-sm overflow-hidden">
         {/* Top Official Seal & Header */}
         <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/50 bg-slate-900 text-white text-center">
-          <div className="flex justify-center mb-3">
+          <div className="flex justify-center">
             <SentraLogo size={36} light={true} />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-            Secure Authentication Gateway
-          </h1>
-          <p className="text-xs text-slate-300 mt-1 max-w-md mx-auto leading-relaxed">
-            Sentiment and Emotional Tracking Risk & Analysis. Role-isolated access for registered complainants and designated public officials.
-          </p>
         </div>
 
         {/* Dedicated Mode Switcher Tabs */}
