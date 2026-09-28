@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   RefreshCw,
   UserPlus,
-  Globe
+  Globe,
+  Search
 } from 'lucide-react';
 
 export const SystemAdminPortal: React.FC = () => {
