@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSentra } from '../../context/SentraContext';
 import { translations } from '../../utils/translations';
 import { CheckInQuestionAnswers, AIAnalysisResult } from '../../types/sentra';
@@ -22,7 +22,8 @@ import {
   Volume2,
   Smile,
   Zap,
-  Coffee
+  Coffee,
+  Loader2
 } from 'lucide-react';
 
 interface VictimCheckInProps {
@@ -67,9 +68,56 @@ export const VictimCheckIn: React.FC<VictimCheckInProps> = ({
   const [submittedTimestamp, setSubmittedTimestamp] = useState<string>('');
 
   const [realTranscript, setRealTranscript] = useState<string>('');
+  const [acousticFeatures, setAcousticFeatures] = useState<any>(null);
+  const [isAnalyzingAudio, setIsAnalyzingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = React.useRef<any>(null);
 
-  const startVoiceRecording = () => {
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setIsAnalyzingAudio(true);
+        
+        try {
+          const formData = new FormData();
+          formData.append('audio', audioBlob);
+          
+          const response = await fetch('http://127.0.0.1:5000/analyze_audio', {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setAcousticFeatures(data.acousticFeatures);
+            console.log("Audio ML Analysis:", data);
+          }
+        } catch (err) {
+          console.warn("Failed to analyze audio", err);
+        } finally {
+          setIsAnalyzingAudio(false);
+        }
+        
+        // Stop all tracks to release mic
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorder.start();
+    } catch (err) {
+      console.error("Microphone access denied or error:", err);
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Your browser does not support real-time speech recognition.");
@@ -126,11 +174,10 @@ export const VictimCheckIn: React.FC<VictimCheckInProps> = ({
 
   const stopVoiceRecording = () => {
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (err) {
-        console.error("Error stopping recognition:", err);
-      }
+      try { recognitionRef.current.stop(); } catch(e){}
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
   };
 
@@ -151,20 +198,20 @@ export const VictimCheckIn: React.FC<VictimCheckInProps> = ({
       hasSupportToTalk: hasSupport,
       wantsCounsellorCall: wantsCounsellor,
       freeTextNote: freeText.trim() ? freeText : undefined,
+      acousticFeatures: acousticFeatures,
       voiceRecorded: hasRecordedVoice,
       voiceTranscript: hasRecordedVoice 
         ? (realTranscript || "Voice note captured without clear transcript.")
         : undefined
     };
 
-    setTimeout(() => {
-      const result = submitCheckIn(answers);
+    submitCheckIn(answers).then(result => {
       setIsProcessing(false);
       setSubmittedResult(result);
       setSubmittedAnswers(answers);
       setSubmittedTimestamp(new Date().toLocaleString());
       onCheckInCompleted(result);
-    }, 500);
+    });
   };
 
   const handleResetForNewCheckIn = () => {
@@ -274,6 +321,17 @@ export const VictimCheckIn: React.FC<VictimCheckInProps> = ({
                 )}
               </div>
             </div>
+
+            {submittedResult.aiResponse && (
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700/80">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2 flex items-center gap-1.5">
+                  ✨ AURA Analysis:
+                </span>
+                <p className="text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-lg leading-relaxed shadow-sm">
+                  {submittedResult.aiResponse}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -573,10 +631,18 @@ export const VictimCheckIn: React.FC<VictimCheckInProps> = ({
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                     <div className="flex items-center justify-between text-emerald-800 mb-2">
                       <div className="flex items-center gap-2 text-sm font-bold">
-                        <CheckCircle2 className="w-4 h-4" /> Audio captured ({recordingSeconds}s)
+                        {isAnalyzingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {isAnalyzingAudio ? 'Analyzing pitch & stress...' : `Audio captured (${recordingSeconds}s)`}
                       </div>
                       <button onClick={() => { setHasRecordedVoice(false); setRealTranscript(''); }} className="text-xs underline">Remove</button>
                     </div>
+                    {acousticFeatures && !isAnalyzingAudio && (
+                      <div className="mt-3 p-3 bg-white/50 rounded-lg text-xs flex gap-3 flex-wrap">
+                        <span className="font-semibold text-slate-700">Acoustic ML Flags:</span>
+                        <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">Pitch: {acousticFeatures.pitchVariability}</span>
+                        <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full">Energy: {acousticFeatures.energyLevel}</span>
+                        <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">Rate: {acousticFeatures.speechRate}</span>
+                      </div>
+                    )}
                     {realTranscript && (
                       <div className="p-3 bg-white/60 rounded-lg text-xs italic text-emerald-900 border border-emerald-100">
                         "{realTranscript}"
@@ -626,3 +692,4 @@ export const VictimCheckIn: React.FC<VictimCheckInProps> = ({
     </div>
   );
 };
+

@@ -1,17 +1,41 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
+import nodemailer from 'nodemailer';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+  }
+});
+
 const PORT = 3001;
 
 let db;
+
+// In-memory store for OTPs (In a real app, use Redis or a database)
+const otpStore = new Map();
+
+// Configure Nodemailer transporter for Gmail
+// Provide your Gmail address and an App Password (not your regular password)
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER || 'your.email@gmail.com',
+    pass: process.env.GMAIL_PASS || 'your-app-password'
+  }
+});
 
 async function initializeDB() {
   db = await open({
@@ -68,8 +92,114 @@ async function initializeDB() {
       details TEXT,
       ipAddress TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS cases (
+      id TEXT PRIMARY KEY,
+      caseNumber TEXT,
+      victimId TEXT,
+      category TEXT,
+      stage TEXT,
+      filingDate TEXT,
+      nextHearingDate TEXT,
+      nextEventTitle TEXT,
+      courtName TEXT,
+      officialUpdates TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS alerts (
+      id TEXT PRIMARY KEY,
+      victimId TEXT,
+      caseId TEXT,
+      victimPseudonym TEXT,
+      district TEXT,
+      severity TEXT,
+      createdAt TEXT,
+      title TEXT,
+      whyFlagged TEXT,
+      confidence INTEGER,
+      modelVersion TEXT,
+      status TEXT,
+      counsellorNotes TEXT,
+      reviewedBy TEXT,
+      reviewedAt TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS interventions (
+      id TEXT PRIMARY KEY,
+      victimId TEXT,
+      caseId TEXT,
+      victimPseudonym TEXT,
+      createdAt TEXT,
+      createdBy TEXT,
+      creatorRole TEXT,
+      type TEXT,
+      title TEXT,
+      priority TEXT,
+      status TEXT,
+      actionNotes TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS appointments (
+      id TEXT PRIMARY KEY,
+      victimId TEXT,
+      counsellorName TEXT,
+      serviceType TEXT,
+      scheduledAt TEXT,
+      location TEXT,
+      status TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      recipientRole TEXT,
+      recipientId TEXT,
+      type TEXT,
+      title TEXT,
+      message TEXT,
+      date TEXT,
+      read BOOLEAN
+    );
   `);
 }
+
+// Socket.io connection logic
+io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
+
+    socket.on('disconnect', () => {
+      console.log('User disconnected:', socket.id);
+    });
+
+    socket.on('submit_checkin', async (data) => {
+      // 1. Broadcast the new check-in to everyone
+      io.emit('checkin_added', data.checkIn);
+      
+      // 2. If there's an alert generated from this check-in, broadcast it
+      if (data.alert) {
+        await db.run(
+          `INSERT OR REPLACE INTO alerts (id, victimId, caseId, victimPseudonym, district, severity, createdAt, title, whyFlagged, confidence, modelVersion, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [data.alert.id, data.alert.victimId, data.alert.caseId, data.alert.victimPseudonym, data.alert.district, data.alert.severity, data.alert.createdAt, data.alert.title, JSON.stringify(data.alert.whyFlagged), data.alert.confidence, data.alert.modelVersion, data.alert.status]
+        );
+        io.emit('alert_added', data.alert);
+      }
+
+      // 3. If there's a notification generated, broadcast it
+      if (data.notification) {
+        await db.run(
+          `INSERT OR REPLACE INTO notifications (id, recipientRole, recipientId, type, title, message, date, read)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [data.notification.id, data.notification.recipientRole, data.notification.recipientId, data.notification.type, data.notification.title, data.notification.message, data.notification.date, false]
+        );
+        io.emit('notification_added', data.notification);
+      }
+    });
+
+    // Generic action sync for other real-time updates
+    socket.on('action_sync', (data) => {
+      socket.broadcast.emit('action_sync', data);
+    });
+  });
 
 // ---- Check-Ins ----
 
@@ -197,6 +327,144 @@ app.post('/api/audit_logs', async (req, res) => {
   }
 });
 
+// ---- Generic GET Endpoints for State Hydration ----
+
+app.get('/api/cases', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM cases');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM alerts ORDER BY createdAt DESC');
+    res.json(rows.map(r => ({...r, whyFlagged: r.whyFlagged ? JSON.parse(r.whyFlagged) : []})));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/interventions', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM interventions ORDER BY createdAt DESC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/appointments', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM appointments ORDER BY scheduledAt ASC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM notifications ORDER BY date DESC');
+    res.json(rows.map(r => ({...r, read: Boolean(r.read)})));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ---- Authentication ----
+
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store it mapped to the email (expires in 5 minutes)
+    otpStore.set(email, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
+
+    const mailOptions = {
+      from: process.env.GMAIL_USER || 'your.email@gmail.com',
+      to: email,
+      subject: 'Your SENTRA Login Code',
+      text: `Your one-time verification password is: ${otp}. It will expire in 5 minutes.`
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).json({ error: 'Failed to send OTP via email' });
+  }
+});
+
+app.post('/api/auth/login/victim', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP are required' });
+    }
+    
+    // Verify OTP
+    const stored = otpStore.get(email);
+    if (!stored || stored.otp !== otp) {
+      return res.status(401).json({ error: 'Invalid or missing OTP' });
+    }
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(email);
+      return res.status(401).json({ error: 'OTP has expired' });
+    }
+    
+    // Valid OTP, remove it from store
+    otpStore.delete(email);
+
+    // Check if victim exists by email
+    let victim = await db.get('SELECT * FROM victims WHERE mail = ?', [email]);
+    
+    if (!victim) {
+      // If no victim, create a basic one for the real-time flow
+      const newId = `V-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newCaseId = `CASE-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      await db.run(
+        `INSERT INTO victims (id, name, mail, caseId, caseType) VALUES (?, ?, ?, ?, ?)`,
+        [newId, 'New User', email, newCaseId, 'General Support']
+      );
+      
+      victim = await db.get('SELECT * FROM victims WHERE id = ?', [newId]);
+    }
+    
+    res.json({ success: true, victim });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/login/staff', async (req, res) => {
+  try {
+    const { staffId, pin, role } = req.body;
+    if (!staffId || !pin) {
+      return res.status(400).json({ error: 'Staff ID and PIN are required' });
+    }
+    
+    res.json({ 
+      success: true, 
+      staff: {
+        id: staffId,
+        role: role
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ---- AI Chat ----
 
 const SYSTEM_INSTRUCTION = `You are AURA (Automated Understanding & Reassurance Assistant), the confidential, trauma-informed AI companion inside the SENTRA justice and victim support platform.
@@ -208,7 +476,8 @@ Key Communication Guidelines:
 2. Trauma-Informed & Grounded: Use calming, steady language. Offer sensory grounding techniques when panic or tension is sensed.
 3. Legal Procedural Guidance: You can explain procedural concepts. Clarify that procedural explanations are informational and advise consulting their assigned counsel or caseworker.
 4. Boundaries & Safety: Never offer definitive judicial verdicts. If severe self-harm or imminent danger is expressed, immediately encourage contacting emergency helplines.
-5. Conciseness: Keep responses easy to read with short paragraphs, gentle bullet points, and actionable calming advice.`;
+5. Conciseness: Keep responses easy to read with short paragraphs, gentle bullet points, and actionable calming advice.
+6. Mindset Prediction: Start your response by explicitly identifying the user's predicted emotional mindset in brackets (e.g., [Predicted Mindset: Highly Anxious]), and then tailor your tone, pacing, and advice to directly soothe and address that specific mental state.`;
 
 function generateEmpatheticFallback(prompt, complainantName) {
   const lower = prompt.toLowerCase();
@@ -235,36 +504,49 @@ function generateEmpatheticFallback(prompt, complainantName) {
 app.post('/api/chat', async (req, res) => {
   try {
     const { history, userPrompt, complainantName = 'Priya', caseId = 'CASE-2026-0819' } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY || '';
+    
+    // We attempt to call local Ollama first
+    try {
+      const messages = [
+        { role: 'system', content: `${SYSTEM_INSTRUCTION}\nContext: Complainant: ${complainantName}, Linked Case: ${caseId}.` }
+      ];
 
-    if (apiKey) {
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const formattedContents = history
+      // Add conversation history
+      history
         .filter((m) => m.sender !== 'system')
         .slice(-6)
-        .map((m) => ({
-          role: m.sender === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }]
-        }));
+        .forEach((m) => {
+          messages.push({
+            role: m.sender === 'user' ? 'user' : 'assistant',
+            content: m.text
+          });
+        });
 
-      formattedContents.push({
-        role: 'user',
-        parts: [{ text: userPrompt }]
+      // Add the new prompt
+      messages.push({ role: 'user', content: userPrompt });
+
+      const response = await fetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama3.1:latest', // use downloaded model
+          messages: messages,
+          stream: false
+        }),
+        signal: AbortSignal.timeout(60000) // 60 second timeout for large models
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: formattedContents,
-        config: {
-          systemInstruction: `${SYSTEM_INSTRUCTION}\nContext: Complainant: ${complainantName}, Linked Case: ${caseId}.`
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.message && data.message.content) {
+          return res.json({ text: data.message.content });
         }
-      });
-
-      if (response && response.text) {
-        res.json({ text: response.text });
-        return;
+      } else {
+        const errText = await response.text();
+        console.warn('Ollama returned an error:', errText);
       }
+    } catch (ollamaError) {
+      console.warn('Ollama connection/timeout error:', ollamaError.message);
     }
 
     const fallbackResponse = generateEmpatheticFallback(userPrompt, complainantName);
@@ -278,7 +560,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 initializeDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+  server.listen(PORT, () => {
+    console.log(`Server and Socket.io running on http://localhost:${PORT}`);
   });
 });

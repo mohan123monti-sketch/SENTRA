@@ -8,39 +8,13 @@ export const SentraLogo: React.FC<{ size?: number; className?: string; withText?
 }) => {
   return (
     <div className={`flex items-center gap-2.5 select-none ${className}`}>
-      {/* Abstract symbol representing protection, connection, human support & signal detection */}
-      <svg 
-        width={size} 
-        height={size} 
-        viewBox="0 0 36 36" 
-        fill="none" 
-        xmlns="http://www.w3.org/2000/svg"
-        className="shrink-0"
-        aria-hidden="true"
-      >
-        {/* Protective Outer Arc */}
-        <path 
-          d="M18 3C10.5 3 4.5 8.2 4.5 15.5C4.5 24.2 14.5 31.8 18 33C21.5 31.8 31.5 24.2 31.5 15.5C31.5 8.2 25.5 3 18 3Z" 
-          stroke={light ? "#38BDF8" : "#0F766E"} 
-          strokeWidth="2.2" 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
-        />
-        {/* Inner Connecting Arcs (Signal & Human Connection) */}
-        <path 
-          d="M11 15C11 11.134 14.134 8 18 8C21.866 8 25 11.134 25 15C25 19.5 18 24.5 18 24.5C18 24.5 11 19.5 11 15Z" 
-          stroke={light ? "#94A3B8" : "#0284C7"} 
-          strokeWidth="1.8" 
-          strokeLinecap="round" 
-        />
-        {/* Core Detection Node / Focal Point */}
-        <circle 
-          cx="18" 
-          cy="15" 
-          r="3" 
-          fill={light ? "#38BDF8" : "#0F766E"} 
-        />
-      </svg>
+      {/* Uploaded Logo Image */}
+      <img 
+        src="/logo.png" 
+        alt="SENTRA Logo" 
+        style={{ width: size, height: size, objectFit: 'contain' }}
+        className="shrink-0 drop-shadow-sm"
+      />
 
       {withText && (
         <div className="flex flex-col leading-none">

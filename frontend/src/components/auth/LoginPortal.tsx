@@ -45,7 +45,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   const [authMode, setAuthMode] = useState<'victim' | 'staff'>(initialTab);
 
   // Victim Login State
-  const [mobileNumber, setMobileNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [victimName, setVictimName] = useState('');
   const [caseType, setCaseType] = useState('General Support');
   const [otpSent, setOtpSent] = useState(false);
@@ -69,49 +69,76 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   // Victim OTP Handlers
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mobileNumber.trim() || !victimName.trim()) {
-      setVictimError('Please enter a valid name and mobile number');
+    if (!email.trim() || !victimName.trim()) {
+      setVictimError('Please enter a valid name and email address');
       return;
     }
     setVictimError('');
-    setOtpSent(true);
-    setOtpCode('');
+    
+    // Call backend to generate and email OTP
+    import('../../services/db').then(async ({ sendOtpEmailAPI }) => {
+      const result = await sendOtpEmailAPI(email);
+      if (result.success) {
+        setOtpSent(true);
+        setOtpCode('');
+      } else {
+        setVictimError(result.error || 'Failed to send OTP email');
+      }
+    }).catch(err => {
+      setVictimError('System error sending OTP');
+    });
   };
 
-  const handleVerifyVictimOtp = (e: React.FormEvent) => {
+  const handleVerifyVictimOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpCode.trim()) {
       setVictimError('Please enter the verification code');
       return;
     }
     setVictimVerifying(true);
-    setTimeout(() => {
+    
+    // Call the new real-time authentication endpoint
+    import('../../services/db').then(async ({ authenticateVictimAPI }) => {
+      const result = await authenticateVictimAPI(email, otpCode);
       setVictimVerifying(false);
-      const useMockId = victimName.toLowerCase().includes('priya') || victimName.toLowerCase().includes('mock');
-      loginAsVictim({
-        id: useMockId ? "V-9042" : undefined,
-        caseId: useMockId ? "CASE-2026-0819" : undefined,
-        name: victimName,
-        mobileNumber: mobileNumber,
-        caseType: caseType
-      });
-      onLoginSuccess('victim');
-    }, 400);
+      
+      if (result.success && result.victim) {
+        // Log in with real verified user data
+        loginAsVictim(result.victim);
+        onLoginSuccess('victim');
+      } else {
+        setVictimError(result.error || 'Invalid OTP verification');
+      }
+    }).catch(err => {
+      setVictimVerifying(false);
+      setVictimError('System error during login');
+    });
   };
 
   // Staff Credentials Handler
-  const handleStaffLogin = (e: React.FormEvent) => {
+  const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!staffName.trim() || !staffId.trim()) {
       setStaffError('Please enter staff name and ID');
       return;
     }
     setStaffVerifying(true);
-    setTimeout(() => {
+    
+    // Call the real-time staff auth endpoint
+    import('../../services/db').then(async ({ authenticateStaffAPI }) => {
+      const result = await authenticateStaffAPI(staffId, staffPin, selectedStaffRole);
       setStaffVerifying(false);
-      loginAsStaff(selectedStaffRole, staffName, staffId, staffDesignation || 'Authorized Official');
-      onLoginSuccess(selectedStaffRole);
-    }, 400);
+      
+      if (result.success) {
+        loginAsStaff(selectedStaffRole, staffName, staffId, staffDesignation || 'Authorized Official');
+        onLoginSuccess(selectedStaffRole);
+      } else {
+        setStaffError(result.error || 'Authentication failed');
+      }
+    }).catch(err => {
+      setStaffVerifying(false);
+      setStaffError('System error during login');
+    });
   };
 
   return (
@@ -178,7 +205,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 </h2>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                Log in using your mobile number registered with your case file. No password required.
+                Log in using your email address registered with your case file. A secure code will be emailed to you.
               </p>
             </div>
 
@@ -211,19 +238,19 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 </div>
 
                 <div>
-                  <label htmlFor="victim-mobile" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    {t.mobilePrompt}
+                  <label htmlFor="victim-email" className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Email Address
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <Phone className="w-4 h-4" />
+                      <Globe className="w-4 h-4" />
                     </div>
                     <input
-                      id="victim-mobile"
-                      type="tel"
-                      value={mobileNumber}
-                      onChange={(e) => setMobileNumber(e.target.value)}
-                      placeholder="Enter registered mobile number"
+                      id="victim-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter registered email address"
                       className="w-full pl-9 pr-3 py-2.5 text-sm rounded border border-slate-300 dark:border-slate-700 focus:border-teal-700 focus:outline-none"
                       required
                     />
@@ -258,7 +285,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
             ) : (
               <form onSubmit={handleVerifyVictimOtp} className="space-y-4 text-xs">
                 <div className="p-3 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 rounded text-xs text-teal-950">
-                  A 6-digit one-time verification password was dispatched to <strong className="font-mono">{mobileNumber}</strong>. (Any pin works for registration in demo)
+                  A 6-digit one-time verification code was dispatched to <strong className="font-mono">{email}</strong>. Please check your inbox.
                 </div>
 
                 <div>
@@ -288,7 +315,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                     onClick={() => setOtpSent(false)}
                     className="w-1/3 py-2.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-950 text-xs font-semibold rounded transition-colors"
                   >
-                    Change No.
+                    Change Email
                   </button>
                   <button
                     type="submit"

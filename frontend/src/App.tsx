@@ -221,7 +221,7 @@ const SentraAppContent: React.FC = () => {
 
       {/* Main Layout Area */}
       {currentView === 'portal' ? (
-        <div className="flex flex-1 w-full max-w-[1600px] mx-auto">
+        <div className="flex flex-1 w-full">
           <Sidebar 
             activeTab={activeTab} 
             setActiveTab={handleSetActiveTab} 

@@ -32,6 +32,10 @@ import {
   getVictimProfileFromDB,
   saveAuditLogToDB
 } from '../services/db';
+import { io, Socket } from 'socket.io-client';
+
+// Initialize socket connection
+const socket: Socket = io('http://localhost:3001');
 
 interface AccessibilitySettings {
   highContrast: boolean;
@@ -62,7 +66,7 @@ interface SentraContextType {
   setAccessibility: React.Dispatch<React.SetStateAction<AccessibilitySettings>>;
   
   // Workflow actions
-  submitCheckIn: (answers: CheckInQuestionAnswers) => AIAnalysisResult;
+  submitCheckIn: (answers: CheckInQuestionAnswers) => Promise<AIAnalysisResult>;
   reviewAlert: (alertId: string, notes: string, action: 'confirm' | 'followup' | 'escalate' | 'closed') => void;
   createIntervention: (data: Omit<InterventionRecord, 'id' | 'createdAt'>, scheduleAppointment?: boolean) => void;
   confirmAppointment: (appointmentId: string) => void;
@@ -118,6 +122,87 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setVictim(savedVictim);
       }
     }).catch(err => console.warn('Could not hydrate victim profile from DB:', err));
+
+    // Hydrate all realtime state from the backend
+    Promise.all([
+      fetch('http://localhost:3001/api/cases').then(res => res.json()),
+      fetch('http://localhost:3001/api/alerts').then(res => res.json()),
+      fetch('http://localhost:3001/api/interventions').then(res => res.json()),
+      fetch('http://localhost:3001/api/appointments').then(res => res.json()),
+      fetch('http://localhost:3001/api/notifications').then(res => res.json())
+    ]).then(([casesData, alertsData, interventionsData, appointmentsData, notificationsData]) => {
+      if (casesData.length) setCases(casesData.map((c: any) => ({...c, officialUpdates: JSON.parse(c.officialUpdates || '[]')})));
+      if (alertsData.length) setAlerts(alertsData);
+      if (interventionsData.length) setInterventions(interventionsData);
+      if (appointmentsData.length) setAppointments(appointmentsData);
+      if (notificationsData.length) setNotifications(notificationsData);
+    }).catch(err => console.error('Failed to hydrate generic state:', err));
+
+
+    // Listen to real-time events from Socket.io
+    socket.on('checkin_added', (checkin: CheckInRecord) => {
+      setCheckIns(prev => {
+        if (prev.some(c => c.id === checkin.id)) return prev;
+        return [checkin, ...prev];
+      });
+    });
+
+    socket.on('alert_added', (alert: AlertItem) => {
+      setAlerts(prev => {
+        if (prev.some(a => a.id === alert.id)) return prev;
+        return [alert, ...prev];
+      });
+    });
+
+    
+    socket.on('action_sync', (data: any) => {
+      switch(data.type) {
+        case 'review_alert':
+          setAlerts(prev => prev.map(a => a.id === data.payload.alertId ? { ...a, ...data.payload.updates } : a));
+          break;
+        case 'create_intervention':
+          setInterventions(prev => {
+            if (prev.some(i => i.id === data.payload.intervention.id)) return prev;
+            return [data.payload.intervention, ...prev];
+          });
+          if(data.payload.appointment) {
+            setAppointments(prev => {
+              if (prev.some(a => a.id === data.payload.appointment.id)) return prev;
+              return [data.payload.appointment, ...prev];
+            });
+          }
+          if(data.payload.notification) {
+            setNotifications(prev => {
+              if (prev.some(n => n.id === data.payload.notification.id)) return prev;
+              return [data.payload.notification, ...prev];
+            });
+          }
+          break;
+        case 'update_appointment':
+          setAppointments(prev => prev.map(a => a.id === data.payload.appointmentId ? { ...a, status: data.payload.status } : a));
+          if(data.payload.notification) {
+            setNotifications(prev => {
+              if (prev.some(n => n.id === data.payload.notification.id)) return prev;
+              return [data.payload.notification, ...prev];
+            });
+          }
+          break;
+      }
+    });
+
+    socket.on('notification_added', (notif: NotificationItem) => {
+      setNotifications(prev => {
+        if (prev.some(n => n.id === notif.id)) return prev;
+        return [notif, ...prev];
+      });
+    });
+
+    return () => {
+      socket.off('checkin_added');
+      socket.off('alert_added');
+      socket.off('notification_added');
+      socket.off('action_sync');
+    };
   }, []);
 
   const [accessibility, setAccessibility] = useState<AccessibilitySettings>({
@@ -314,26 +399,37 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [accessibility]);
 
+  
   // AI Feature Fusion & Baseline Comparison Engine
-  const submitCheckIn = (answers: CheckInQuestionAnswers): AIAnalysisResult => {
+  const submitCheckIn = async (answers: CheckInQuestionAnswers): Promise<AIAnalysisResult> => {
     const timestamp = new Date().toISOString();
     
-    // 1. Compute Distress Components based on check-in responses
-    // Mood: 1 (Very Low) -> 5 (Very Good). Invert: (5 - Mood) * 15 (max 60)
-    const moodDistress = (5 - answers.overallMood) * 12; 
-    // Stress: 1 -> 5. Score: (Stress - 1) * 10 (max 40)
-    const stressDistress = (answers.stressLevel - 1) * 8;
-    // Sleep: 1 -> 5. Invert: (5 - Sleep) * 6 (max 24)
-    const sleepDistress = (5 - answers.sleepQuality) * 5;
-    // Safety flag: if false, substantial risk weight (+25)
-    const safetyPenalty = !answers.feelsSafe ? 25 : 0;
-    // Support flag: if false (+10)
-    const isolationPenalty = !answers.hasSupportToTalk ? 10 : 0;
-    // Direct request: (+10)
-    const requestWeight = answers.wantsCounsellorCall ? 10 : 0;
+    let distressIndicator = 0;
+    let reviewRecommended = false;
+    let primaryEmotions = ['anxiety', 'fear']; // defaults
 
-    let rawScore = moodDistress + stressDistress + sleepDistress + safetyPenalty + isolationPenalty + requestWeight;
-    const distressIndicator = Math.min(98, Math.max(8, Math.round(rawScore * 0.72)));
+    // 1. Call Python ML Microservice (XGBoost + DistilRoBERTa)
+    try {
+      const mlResponse = await fetch('http://127.0.0.1:5000/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers })
+      });
+      if (mlResponse.ok) {
+        const mlData = await mlResponse.json();
+        distressIndicator = mlData.distressIndicator;
+        reviewRecommended = mlData.reviewRecommended;
+        if (mlData.primaryEmotion) {
+          primaryEmotions = [mlData.primaryEmotion];
+        }
+      }
+    } catch (err) {
+      console.warn('ML Service unreachable, falling back to JS math', err);
+      // Fallback JS math
+      const rawScore = (5 - answers.overallMood) * 12 + (answers.stressLevel - 1) * 8 + (5 - answers.sleepQuality) * 5 + (!answers.feelsSafe ? 25 : 0) + (!answers.hasSupportToTalk ? 10 : 0) + (answers.wantsCounsellorCall ? 10 : 0);
+      distressIndicator = Math.min(98, Math.max(8, Math.round(rawScore * 0.72)));
+      reviewRecommended = distressIndicator >= 70 || !answers.feelsSafe;
+    }
 
     // Sentiment calculation from free-text and ratings
     let sentiment = (answers.overallMood - 3) / 2; // -1.0 to 1.0 base
@@ -342,13 +438,13 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (lower.includes('fear') || lower.includes('terrified') || lower.includes('panic') || lower.includes('alone') || lower.includes('scared') || lower.includes('cannot sleep')) {
         sentiment = Math.max(-0.95, sentiment - 0.4);
       } else if (lower.includes('better') || lower.includes('calm') || lower.includes('peace') || lower.includes('thank')) {
-        sentiment = Math.min(0.9, sentiment + 0.3);
+        sentiment = Math.min(0.9, sentiment - 0.4);
       }
     }
 
     // Baseline delta comparison
     const baseDistress = (5 - victim.baseline.emotionalWellbeing) * 12 + (victim.baseline.stressLevel - 1) * 8;
-    const deltaPercent = Math.round(((rawScore - baseDistress) / Math.max(10, baseDistress)) * 100);
+    const deltaPercent = Math.round(((distressIndicator - baseDistress) / Math.max(10, baseDistress)) * 100);
     const stressDelta = Number((answers.stressLevel - victim.baseline.stressLevel).toFixed(1));
     const sleepDelta = Number((answers.sleepQuality - victim.baseline.sleepQuality).toFixed(1));
 
@@ -374,60 +470,23 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
 
-    if (answers.sleepQuality <= 2) {
-      whyFlagged.push('Marked sleep disturbance reported over multiple days');
-      featureAttributions.push({
-        factor: 'Sleep Disturbance',
-        impact: 'elevated',
-        description: `Sleep restfulness rated at ${answers.sleepQuality}/5`
-      });
-    }
-
     if (answers.wantsCounsellorCall) {
-      whyFlagged.push('Direct request for counsellor support recorded in check-in');
+      whyFlagged.push('Complainant explicitly requested a counsellor callback');
       featureAttributions.push({
-        factor: 'Direct Support Request',
+        factor: 'Direct Request',
         impact: 'elevated',
-        description: 'Explicit request for human consultation logged'
+        description: 'User initiated request for human intervention'
       });
     }
-
-    if (answers.voiceRecorded) {
-      featureAttributions.push({
-        factor: 'Vocal Acoustic Analysis',
-        impact: rawScore > 50 ? 'elevated' : 'neutral',
-        description: 'Acoustic prosody analysis detected cadence variation and tension indicators'
-      });
-    }
-
-    // Proximity to case hearing
-    whyFlagged.push('Approaching case proceeding milestone (Trial Examination on 04-Oct-2026)');
-    featureAttributions.push({
-      factor: 'Case-Stage Proximity',
-      impact: 'elevated',
-      description: 'System correlates distress escalation with imminent court cross-examination'
-    });
-
-    const primaryEmotions: string[] = [];
-    if (distressIndicator > 65) {
-      primaryEmotions.push('Acute Situational Distress', 'Apprehension');
-      if (!answers.feelsSafe) primaryEmotions.push('Safety Concern');
-    } else if (distressIndicator > 35) {
-      primaryEmotions.push('Moderate Stress', 'Vigilance');
-    } else {
-      primaryEmotions.push('Calm', 'Stable Routine');
-    }
-
-    const reviewRecommended = distressIndicator >= 45 || !answers.feelsSafe || answers.wantsCounsellorCall;
 
     const analysis: AIAnalysisResult = {
       distressIndicator,
       sentimentScore: Number(sentiment.toFixed(2)),
-      primaryEmotions,
-      acousticFeatures: answers.voiceRecorded ? {
-        pitchVariability: distressIndicator > 60 ? 'low' : 'moderate',
-        speechRate: distressIndicator > 60 ? 'slow' : 'standard',
-        energyLevel: distressIndicator > 60 ? 'tense' : 'stable'
+      primaryEmotions: primaryEmotions,
+      acousticFeatures: answers.acousticFeatures ? {
+        pitchVariability: answers.acousticFeatures.pitchVariability === 'monotone' ? 'low' : answers.acousticFeatures.pitchVariability === 'normal' ? 'moderate' : 'elevated',
+        speechRate: answers.acousticFeatures.speechRate === 'normal' ? 'standard' : answers.acousticFeatures.speechRate,
+        energyLevel: answers.acousticFeatures.energyLevel === 'low' ? 'depressed' : answers.acousticFeatures.energyLevel === 'normal' ? 'stable' : 'tense'
       } : undefined,
       baselineDelta: {
         distressDeltaPercent: deltaPercent,
@@ -517,6 +576,67 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     setAuditLogs(prev => [newAudit, ...prev]);
 
+    // Emit via WebSocket to Backend (Real-Time Broadcast)
+    let caseworkerNotifForSocket = undefined;
+    let newAlertForSocket = undefined;
+    
+    if (reviewRecommended) {
+      newAlertForSocket = {
+        id: `ALT-${Date.now().toString().slice(-4)}`,
+        victimId: victim.id,
+        caseId: victim.caseId,
+        victimPseudonym: victim.pseudonym,
+        district: victim.district,
+        severity: newRisk,
+        createdAt: timestamp,
+        title: !answers.feelsSafe 
+          ? 'Safety concern & acute distress logged in latest check-in'
+          : `Well-being indicator elevation (+${deltaPercent}% baseline shift)`,
+        whyFlagged: analysis.whyFlagged,
+        confidence: analysis.confidenceScore,
+        modelVersion: analysis.modelVersion,
+        status: 'new'
+      };
+      
+      caseworkerNotifForSocket = {
+        id: `NOTIF-${Date.now().toString().slice(-4)}`,
+        recipientRole: 'counsellor',
+        type: 'human_review_alert',
+        title: `Priority Review Flagged: ${victim.pseudonym}`,
+        message: `Distress indicator ${distressIndicator}/100 with baseline shift (+${deltaPercent}%). Human review requested.`,
+        date: timestamp,
+        read: false
+      };
+    }
+
+    socket.emit('submit_checkin', {
+      checkIn: newCheckIn,
+      alert: newAlertForSocket,
+      notification: caseworkerNotifForSocket
+    });
+
+    try {
+      const prompt = `I am completing my daily check-in. My overall mood is ${answers.overallMood}/5. My stress level is ${answers.stressLevel}/5. My sleep quality was ${answers.sleepQuality}/5. I currently feel ${answers.feelsSafe ? 'safe' : 'unsafe'}. ${answers.freeTextNote ? 'Additional notes: ' + answers.freeTextNote : ''} Please analyze my mindset and provide a brief, supportive response.`;
+      
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          history: [],
+          userPrompt: prompt,
+          complainantName: victim.pseudonym,
+          caseId: victim.caseId
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        analysis.aiResponse = data.text;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch AI check-in response', err);
+    }
+
     return analysis;
   };
 
@@ -581,7 +701,7 @@ export const SentraProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAppointments(prev => [newAppt, ...prev]);
 
       // Notify victim
-      const victimNotif: NotificationItem = {
+      const victimNotif: import('../types/sentra').NotificationItem = {
         id: `NOTIF-${Date.now().toString().slice(-4)}`,
         recipientRole: 'victim',
         recipientId: data.victimId,

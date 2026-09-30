@@ -157,3 +157,50 @@ export const saveAuditLogToDB = async (entry: AuditLogEntry): Promise<void> => {
     console.error('Failed to save audit log:', error);
   }
 };
+
+/* =========================================================================
+   AUTHENTICATION OPERATIONS
+   ========================================================================= */
+
+export const sendOtpEmailAPI = async (email: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+  try {
+    const response = await fetch(`${API_URL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to send OTP:', error);
+    return { success: false, error: 'Network error while sending OTP' };
+  }
+};
+
+export const authenticateVictimAPI = async (email: string, otp: string): Promise<{ success: boolean; victim?: VictimProfile; error?: string }> => {
+  try {
+    const response = await fetch(`${API_URL}/auth/login/victim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Victim auth failed:', error);
+    return { success: false, error: 'Network error during login' };
+  }
+};
+
+export const authenticateStaffAPI = async (staffId: string, pin: string, role: string): Promise<{ success: boolean; staff?: any; error?: string }> => {
+  try {
+    const response = await fetch(`${API_URL}/auth/login/staff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ staffId, pin, role })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Staff auth failed:', error);
+    return { success: false, error: 'Network error during login' };
+  }
+};
+

@@ -99,6 +99,11 @@ export interface CheckInQuestionAnswers {
   freeTextNote?: string;
   voiceRecorded?: boolean;
   voiceTranscript?: string;
+  acousticFeatures?: {
+    pitchVariability: 'monotone' | 'normal' | 'elevated';
+    speechRate: 'slow' | 'normal' | 'rapid';
+    energyLevel: 'low' | 'normal' | 'tense';
+  };
 }
 
 export interface AIAnalysisResult {
@@ -106,6 +111,7 @@ export interface AIAnalysisResult {
   distressIndicator: number; // 0-100
   sentimentScore: number; // -1.0 to +1.0
   primaryEmotions: string[];
+  aiResponse?: string;
   acousticFeatures?: {
     pitchVariability: 'low' | 'moderate' | 'elevated';
     speechRate: 'slow' | 'standard' | 'rapid';
